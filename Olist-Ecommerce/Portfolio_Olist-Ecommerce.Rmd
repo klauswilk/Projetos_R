@@ -1,0 +1,1329 @@
+---
+title: "![](D:/Klaus/Projetos_porfolio/R/Olist-Ecommerce/logo.png)"
+author: "Klaus Wilken"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    highlight: pygments
+    theme: flatly
+    number_sections: yes
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: no
+---
+
+# Introdução
+
+**O projeto está em construção.**
+
+O Olist é uma startup brasileira que atua no segmento de e-commerce. Fundado em 2015, o Olist conecta empreendedores a marketplaces, ou possibilita a criação de lojas virtuais aos empreendedores.
+
+Este projeto apresenta uma `análise exploratória de dados` utilizando dados históricos da empresa Olist. A análise tem como objetivo oferecer insights sobre os padrões de vendas, desempenho de entrega dos pedidos e outras informações relevantes que possam embasar a tomada de decisões estratégicas.
+
+## Metodologia
+
+A análise exploratória foi conduzida usando técnicas estatísticas e de visualização. Foram explorados os seguintes aspectos:
+
+<br> **Receita**: Análises da receita por ano e trimestre.
+
+<br> **Padrões de Venda**: Valor médio das transações(ticket médio) e categorias de produtos.
+
+<br> **Tempo e Freqüência das Vendas**: Horários, dias da semana e sazonalidade.
+
+<br> **Desempenho de Entrega**: Tempo de entrega, taxa de entrega no prazo e atrasos.
+
+<br> **Satisfação do Cliente**: Avaliação geral da experiência de compra e opiniões sobre os produtos adquiridos.
+
+Não foi possível realizar uma análise de perfil dos consumidores, pois não havia dados referentes à idade e ao gênero destes consumidores, por exemplo.
+
+## As bases de dados
+
+As bases de dados foram obtidas na plataforma [kaggle](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce). Este conjunto de dados possui informações de, aproximadamente, 100 mil pedidos de 2016 a 2018, em várias regiões do Brasil.
+
+# Carregando os Dados
+
+## Instalando e carregando os pacotes
+
+Os pacotes necessários já foram previamente instalados. Portanto, nesta etapa do projeto, carregaremos os pacotes a serem utilizados.
+
+```{r message=FALSE, warning=FALSE}
+
+
+
+library(data.table)
+library(ggplot2)
+library(plyr)
+library(lattice)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(DT)
+library(kableExtra)
+library(SmartEDA)
+library(data.table)
+library(stringr)
+require(lubridate)
+library(readxl)
+library(plotly)
+library(flexdashboard)
+library(zoo)
+library(htmlwidgets)
+
+```
+
+## Importando as bases de dados
+
+Primeiramente, importaremos o conjunto de dados.
+
+```{r}
+
+consumidores <- read_csv('olist_customers_dataset.csv')
+
+geolocalizacao <- read_csv('olist_geolocation_dataset.csv')
+
+vendas <- read_csv('olist_order_items_dataset.csv')
+
+pagamentos <- read_csv('olist_order_payments_dataset.csv')
+
+avaliacoes <- read_csv('olist_order_reviews_dataset.csv')
+
+pedidos <- read_csv('olist_orders_dataset.csv')
+
+produtos <- read_csv('olist_products_dataset.csv')
+
+vendedores <- read_csv('olist_sellers_dataset.csv')
+
+
+```
+
+## Pré-visualização
+
+Faremos uma pré-visualização dos dados utilizando a função `head`, que apresentará os tipos de dados de cada variável (coluna) e 6 registros (linhas) dos bancos de dados carregados.
+
+```{r}
+head(consumidores)
+
+
+```
+
+```{r }
+head(geolocalizacao)
+```
+
+```{r}
+head(vendas)
+```
+
+```{r}
+head(pagamentos)
+
+```
+
+```{r}
+head(avaliacoes)
+```
+
+```{r}
+head(pedidos) 
+```
+
+```{r}
+head(produtos)
+```
+
+```{r}
+head(vendedores)
+
+```
+
+# Data Wrangling
+
+Nesta etapa do projeto, iremos manipular e realizar as transformações necessárias dos dados.
+
+## Visão geral dos dados
+
+Primeiramente, destacaremos observações extraídas de cada dataset e como as suas respectivas variáveis estão distribuídas.
+
+<br> **Dataset Consumidores**
+
+Este banco de dados contém informações referentes aos consumidores e sua localização.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+var_consumidores <- data.frame(Variaveis = c("customer_id","customer_unique_id","customer_zip_code_prefix", "customer_city","customer_state"), Tipo_de_dados = rep("Character", 5), Informacoes_de_Variaveis = c("Identificador exclusivo de pedido por cliente", "Identificador exclusivo do consumidor", "Os cinco primeiros dígitos do código postal do consumidor (CEP)","Nome da cidade do consumidor","Sigla do estado do consumidor"))
+                               
+                       
+  kable(var_consumidores, col.names =  c("Variáveis", "Tipo de dados", "Informações das Variáveis")) %>%
+  kable_styling(full_width = F, bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+column_spec(1, bold = T) %>% column_spec(2,italic = T)                         
+```
+
+<br> **Dataset Geolocalização**
+
+Este banco de dados contém informações referentes aos códigos postais brasileiros (CEPs) e suas respectivas latitudes e longitudes.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+var_geolocalizacao <- data.frame(Variaveis = c("geolocation_zip_code_prefix","geolocation_lat","geolocation_lng", "geolocation_city","geolocation_state"), Tipo_de_dados = c("Character", "Double", "Double","Character","Character"), Informacoes_de_Variaveis = c("Os cinco primeiros dígitos do código postal (CEP)", "Latitude", "Longitude","Nome da cidade","Sigla do estado"))
+                               
+                       
+  kable(var_geolocalizacao, col.names =  c("Variáveis", "Tipo de dados", "Informações das Variáveis")) %>%
+  kable_styling(full_width = F, bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+column_spec(1, bold = T) %>% column_spec(2,italic = T)
+
+```
+
+<br> **Dataset Vendas**
+
+Este banco de dados contém informações referentes às vendas dos produtos.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+var_vendas <- data.frame(Variaveis = c("order_id","order_item_id","product_id","seller_id","shipping_limit_date","price","freight_value"), Tipo_de_dados = c("Character", "Double", "Character","Character","Date-time","Double", "Double"), Informacoes_de_Variaveis = c("Identificador exclusivo de pedido", "Quantidade de itens no pedido", "Identificador exclusivo do produto","Identificador exclusivo do vendedor","Data limite de envio do produto pelo vendedor", "Valor de venda do produto", "Valor do frete"))
+                               
+                       
+  kable(var_vendas, col.names =  c("Variáveis", "Tipo de dados", "Informações das Variáveis")) %>%
+  kable_styling(full_width = F, bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+column_spec(1, bold = T) %>% column_spec(2,italic = T)
+
+```
+
+<br> **Dataset Pagamentos**
+
+Este banco de dados contém informações sobre os métodos de pagamento dos pedidos.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+var_pagamentos <- data.frame(Variaveis = c('order_id',"payment_sequential","payment_type", "payment_installments","payment_value"), Tipo_de_dados = c("Character", "Double", "Character","Double","Double"), Informacoes_de_Variaveis = c("Identificador exclusivo de pedido", "Quantidade de métodos de pagamento", "Método de pagamento","Quantidade de parcelamento","Valor da transação"))
+                               
+                       
+  kable(var_pagamentos, col.names =  c("Variáveis", "Tipo de dados", "Informações das Variáveis")) %>%
+  kable_styling(full_width = F, bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+column_spec(1, bold = T) %>% column_spec(2,italic = T)
+  
+```
+
+<br> **Dataset Avaliações**
+
+Este banco de dados contém dados sobre as avaliações feitas pelos consumidores após as entregas.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+var_avaliacoes <- data.frame(Variaveis = c("review_id","order_id","review_score","review_comment_title","review_comment_message","review_creation_date","review_answer_timestamp"), Tipo_de_dados = c("Character", "Character", "Double","Character","Character","Date-time", "Date-time"), Informacoes_de_Variaveis = c("Identificador exclusivo de avaliação", "Identificador exclusivo de pedido", "Nota de avaliação dada pelo consumidor numa escala de 1 a 5","Título da avaliação dada pelo consumidor","Avaliação dada pelo consumidor", "Data da avaliação realizada pelo consumidor", "Data da resposta feita pelos vendedores aos consumidores"))
+                               
+                       
+  kable(var_avaliacoes, col.names =  c("Variáveis", "Tipo de dados", "Informações das Variáveis")) %>%
+  kable_styling(full_width = F, bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+column_spec(1, bold = T) %>% column_spec(2,italic = T)
+
+```
+
+<br> **Dataset Pedidos**
+
+Este é o principal banco de dados com informações relacionadas aos pedidos.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+var_pedidos <- data.frame(Variaveis = colnames(pedidos), Tipo_de_dados =c("Character", "Character", "Character","Date-time","Date-time","Date-time", "Date-time", "Date-time"), Informacoes_de_Variaveis = c("Identificador exclusivo de pedido", "Identificador exclusivo de consumidor", "Status do pedido","Data de compra realizada pelo consumidor","Data de aprovação de pagamento","Data de postagem do pedido","Data de entrega do pedido ao consumidor", "Data estimada de entrega" ))
+                               
+                       
+  kable(var_pedidos, col.names =  c("Variáveis", "Tipo de dados", "Informações das Variáveis")) %>%
+  kable_styling(full_width = F, bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+column_spec(1, bold = T) %>% column_spec(2,italic = T)
+
+```
+
+<br> **Dataset Produtos**
+
+Esta base de dados inclui dados sobre os produtos vendidos.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+var_produtos <- data.frame(Variaveis = colnames(produtos), Tipo_de_dados =c("Character", "Character", "Double","Double","Double","Double", "Double", "Double", "Double"), Informacoes_de_Variaveis = c("Identificador exclusivo de pedido", "Categorias dos produtos", "Quantidade de caracteres do nome do produto","Quantidade de caracteres da descrição do produto","Quantidade de fotos publicadas do produto","Peso do produto em gramas","Comprimento do produco em centímetros","Altura do produto em centímetros" ,"Largura do produto em centímetros" ))
+                               
+                       
+  kable(var_produtos, col.names =  c("Variáveis", "Tipo de dados", "Informações das Variáveis")) %>%
+  kable_styling(full_width = F, bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+column_spec(1, bold = T) %>% column_spec(2,italic = T)
+
+```
+
+<br> **Dataset Vendedores**
+
+Esta base de dados inclui dados sobre os comerciantes.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+var_vendedores <- data.frame(Variaveis = c("seller_id","seller_zip_code_prefix", "seller_city","seller_state"), Tipo_de_dados = rep("Character", 4), Informacoes_de_Variaveis = c("Identificador exclusivo de vendedor","Os cinco primeiros dígitos do código postal do vendedor (CEP)","Nome da cidade do vendedor","Sigla do estado do vendedor"))
+                               
+                       
+  kable(var_vendedores, col.names =  c("Variáveis", "Tipo de dados", "Informações das Variáveis")) %>%
+  kable_styling(full_width = F, bootstrap_options = c("striped", "hover", "condensed", "responsive")) %>%
+column_spec(1, bold = T) %>% column_spec(2,italic = T)
+```
+
+<br> Após essas observações, as colunas do tipo *Date-time* podem ser idenficadas como da classe *POSIXct*. <br>
+
+## Verificação de inconsistência dos dados
+
+### Verificação de valores duplicados
+
+<br> Agora, iremos verificar a existência de registros duplicados em todas as bases de dados. Caso sejam encontrados regitros duplicados, avaliaremos se será necessário excluir estes registros.
+
+<br> Iremos verificar a existência de registros duplicados no dataset **Consumidores**.
+
+```{r}
+summary(sapply(consumidores, duplicated))
+```
+
+<br> O **dataset Consumidores** tem como *chave primária a coluna customer_id*, que é o identificador único (exclusivo) de cada compra realizada pelo consumidor e não possui registros duplicados.
+
+A coluna *customer_unique_id* é o identifcador exclusivo do consumidor, porém, ela possui informações importantes. Este dataset, `possui 96096 consumidores e apenas 3345 fizeram pelo menos duas compras`. Desse modo, os registros duplicados encontrados são aceitáveis.
+
+Já as outras colunas com os registros duplicados possuem valores previstos, pois estão relacionados a dados da localização de moradia dos consumidores.
+
+Portanto, neste dataset nenhuma exclusão de registro duplicado será necessária.
+
+<br> Iremos verificar a existência de registros duplicados no dataset **Geolocalização**.
+
+```{r}
+summary(sapply(geolocalizacao, duplicated))
+
+```
+
+<br> O dataset **Geolocalização** possui registros duplicados em todas as colunas.
+
+Porém, tal comportanto é aceitável, pois esta base de dados possui todos os registros dos dados de geolocalização dos clientes e vendedores.
+
+Portanto, nenhuma exclusão de registro duplicado será necessária.
+
+<br> Iremos verificar a existência de registros duplicados no dataset **Vendas**.
+
+```{r}
+summary(sapply(vendas, duplicated))
+
+```
+
+<br> O dataset **Vendas** possui registros duplicados em todas as colunas. A coluna *order_id* não deveria possuir registros duplicados. Faremos uma breve análise aos registros duplicados nesta coluna.
+
+```{r}
+
+data.frame(vendas %>%
+  filter(duplicated(order_id)) %>%
+    count(order_item_id, sort = T))
+
+
+```
+
+<br> Após essa breve análise, a coluna *order_item_id* possui pelo menos 2 itens vendidos. Logo, no dataset **vendas**, a coluna *order_id* possui o registro de cada produto vendido ocasionando duplicidade de informação. Portanto, como esse dataset já possui a coluna *product_id*, filtraremos os registros duplicados da coluna *order_id*, pelo valor máximo da coluna *order_item_id*.
+
+```{r}
+  vendas_limpo <- vendas %>%
+    group_by(order_id) %>%
+    filter(order_item_id == max(order_item_id))
+
+```
+
+```{r}
+summary(sapply(vendas_limpo, duplicated))
+```
+
+<br> Os valores duplicados da coluna *order_id* foram removidos. Agora, verificaremos se as condições definidas para a remoção foram respeitadas.
+
+```{r}
+summary(data.frame(semi_join((vendas %>% filter(duplicated(order_id))) , vendas_limpo), by = "order_item_id"))
+
+```
+
+<br> As remoções foram devidamente realizadas, pois ao verificar com os valores duplicados na coluna *order_id* do dataset **vendas**, eles estão distribuídos entre 2 e 21 na coluna *order_item_id*, conforme o previsto.
+
+<br> Iremos verificar a existência de registros duplicados no dataset **Pagamentos**.
+
+```{r}
+summary(sapply(pagamentos, duplicated))
+```
+
+<br> O dataset **Pagamentos** possui registros duplicados em todas as colunas.
+
+A coluna *order_id* possui registros duplicados, pois num mesmo pedido o consumidor pode utilizar métodos de pagamento distintos. Faremos uma breve análise aos registros duplicados nesta coluna., realizando a junção com o dataset **vendas_limpo**.
+
+Nesta análise, criaremos duas colunas, sendo a prnmeira de soma acumulada (i.e. soma total dos dados que varia para cada registro de forma incremental) da coluna *payment_value* e a segunda coluna é referente à soma das colunas *price* e *freight_value*. Essas colunas foram criadas para verificar se os valores coincidem.
+
+```{r}
+
+(data.frame(inner_join(vendas_limpo ,pagamentos %>%  filter( order_id == "fa65dad1b0e818e3ccc5cb0e39231352")) %>% arrange(payment_sequential) %>% mutate(soma_acumulativa = cumsum(payment_value), price_freight_value = (price + freight_value))))
+
+
+```
+
+<br> Após essa análise foi identificado que a coluna *payment_value* é o valor de compra do produto relacionado à coluna *payment_sequential*. Além disso, somando todos os valores da coluna *payment_value* por produto é equivalente às somas das colunas *price* e *freight_value*. Agora, verificaremos os tipos de pagamento.
+
+```{r}
+pagamentos %>% 
+  group_by(payment_type) %>%
+  count(payment_type, sort = T) 
+ 
+ 
+```
+
+```{r}
+pagamentos %>% filter(payment_type == "not_defined")
+ 
+pagamentos <- pagamentos %>% filter(payment_type != "not_defined")
+```
+
+<br> Após análises, identificamos 3 pedidos com o tipo de pagamento como *not_defined*. Por isso, excluímos esses registros.
+
+O dataset **Pagamentos** possui **99437 registros únicos** na coluna *order_id*. Não excluiremos os registros duplicados, pois tivemos registros com mais de um tipo de pagamento de compra.
+
+<br> Iremos verificar a existência de registros duplicados no dataset **Avaliações**.
+
+```{r}
+summary(sapply(avaliacoes, duplicated))
+```
+
+<br> O dataset **Avaliações** possui registros duplicados em todas as colunas. A coluna *review_id* possui duplicidade porque um mesmo consumidor fez mais de uma avalição. Já as outras colunas são aceitáveis terem registros duplicados.
+
+<br> Iremos verificar a existência de registros duplicados no dataset **Pedidos**.
+
+```{r}
+summary(sapply(pedidos, duplicated))
+```
+
+<br> No dataset **Pedidos**, a coluna *order_id* é chave primária e não possui registros duplicados, assim como a coluna *customer_id*. Já as outras colunas possuem registros duplicados, o que é aceitável, pois a variável *order_status* possui 8 tipos de status relacionados à compra e entrega dos produtos, enquanto as outras variáveis estão relacionadas às datas de compra, entrega e estimativa de entrega.
+
+<br> Iremos verificar a existência de registros duplicados no dataset **Produtos**.
+
+```{r}
+summary(sapply(produtos, duplicated))
+```
+
+<br> No dataset **Produtos**, a coluna *product_id* não possui registros duplicados, enquanto a coluna *product_category_name* possui 74 categorias de produto e por isso, os registros duplicados são esperados.
+
+<br> Iremos verificar a existência de registros duplicados no dataset **Vendedores**.
+
+```{r}
+summary(sapply(vendedores, duplicated))
+
+```
+
+<br> No dataset **Vendedores**, a coluna *seller_id* é a chave identificadora dos vendedores e não possui registros duplicados. Já as demais colunas possuem registros duplicados que estão relacionados às localizações dos vendedores e são aceitáveis.
+
+### Verificação de valores ausentes
+
+<br> Agora, iremos verificar a existência de valores ausentes (`NA`).
+
+<br> **Dataset Consumidores**
+
+```{r}
+data.frame(anyNA = sapply(consumidores,anyNA))
+
+```
+
+<br> **Dataset Geolocalização**
+
+```{r}
+data.frame(anyNA = sapply(geolocalizacao,anyNA))
+```
+
+<br> **Dataset Vendas**
+
+```{r}
+data.frame(anyNA = sapply(vendas_limpo,anyNA))
+```
+
+<br> **Dataset Pagamentos**
+
+```{r}
+
+data.frame(anyNA = sapply(pagamentos,anyNA))
+
+```
+
+<br> **Dataset Avaliações**
+
+```{r}
+data.frame(anyNA = sapply(avaliacoes,anyNA))
+```
+
+<br> **Dataset Pedidos**
+
+```{r}
+data.frame(anyNA = sapply(pedidos,anyNA))
+```
+
+<br> **Dataset Produtos**
+
+```{r}
+data.frame(anyNA = sapply(produtos,anyNA))
+```
+
+<br> **Dataset Vendedores**
+
+```{r}
+data.frame(anyNA = sapply(vendedores,anyNA))
+```
+
+<br> **Foram encontrados registros ausentes** nos datasets **Avaliações** e **Pedidos**.
+
+<br> Porém, essas verificações não detectam o caractere *espaço*, pois elas só vão detectar ausência de dados e não de informação. Neste sentido, um registro que contém somente o caractere *espaço*, configura um valor ausente. Por isso, iremos verificar a existência de registros com o caractere *espaço* de cada dataset utilizando a função `grepl` e a expressão regular `^\\s*$` que verificará a existência do caractere *espaço* em cada observação (linha) analisada.
+
+<br> **Dataset Consumidores**
+
+```{r}
+col_consumidores <- names(consumidores)
+
+data.frame(grepl("^\\s*$", consumidores), row.names = col_consumidores )
+
+```
+
+<br> **Dataset Geolocalização**
+
+```{r}
+col_geolocalizacao <- names(geolocalizacao)
+
+data.frame(grepl("^\\s*$", geolocalizacao), row.names = col_geolocalizacao )
+
+
+```
+
+<br> **Dataset Vendas**
+
+```{r}
+col_vendas <- names(vendas_limpo)
+
+data.frame(grepl("^\\s*$", vendas), row.names = col_vendas) 
+```
+
+<br> **Dataset Pagamentos**
+
+```{r}
+col_pagamentos <- names(pagamentos)
+
+data.frame(grepl("^\\s*$", pagamentos), row.names = col_pagamentos)
+
+
+```
+
+```{r echo=FALSE}
+
+```
+
+<br> **Dataset Avaliações**
+
+```{r}
+col_avaliacoes <- names(avaliacoes)
+
+data.frame(grepl("^\\s*$", avaliacoes), row.names = col_avaliacoes)
+```
+
+<br> **Dataset Pedidos**
+
+```{r}
+col_pedidos <- names(pedidos)
+
+data.frame(grepl("^\\s*$", pedidos), row.names = col_pedidos)
+ 
+```
+
+<br> **Dataset Produtos**
+
+```{r}
+col_produtos <- names(produtos)
+
+data.frame(grepl("^\\s*$", produtos), row.names = col_produtos)
+
+```
+
+<br> **Dataset Vendedores**
+
+```{r}
+col_vendedores <- names(vendedores)
+
+data.frame(grepl("^\\s*$", vendedores), row.names = col_vendedores)
+
+```
+
+<br> Não foram encontrados registros com o caractere *espaço* nos datasets.
+
+<br> Logo, iremos verificar os registros apontados como ausentes nos datasets **Avaliações**, **Pedidos** e **Produtos**.
+
+<br> Na base de dados **Avaliações**, os valores ausentes encontrados nas colunas *review_comment_title* e *review_comment_message* são aceitáveis, porque são colunas referentes ao título da avaliação dada pelo consumidor e pela sua respectiva avaliação escrita. Portanto, esses consumidores não fizeram comentários nas suas avaliações.
+
+<br> Na base de dados **Pedidos**, foram encontrados valores ausentes nas colunas *order_approved_at*, *order_delivered_carrier_date* e *order_delivered_customer_date*. Deduz-se que estes valores ausentes estejam relacionados ao não envio de pedidos ou a dados que não foram processados. Iremos analisar o dataset com estes valores ausentes para chegarmos a uma conclusão.
+
+<br> Primeiramente, analisaremos todos os pedidos por status.
+
+```{r}
+
+pedidos %>%
+group_by(order_status) %>%
+  count(order_status, sort = T)
+  
+
+```
+
+<br> Agora, analisaremos apenas os pedidos com os valores NA nas colunas *order_approved_at*, *order_delivered_carrier_date* e *order_delivered_customer_date*.
+
+```{r}
+data.frame(pedidos %>%
+filter(is.na(order_approved_at)|is.na(order_delivered_customer_date)| is.na(order_delivered_carrier_date) )%>%
+count(order_status, sort = T))
+```
+
+<br> Agora, analisaremos por os valores NA por coluna.
+
+```{r}
+data.frame(pedidos %>%
+filter(is.na(order_approved_at) )%>%
+count(order_status, sort = T))
+```
+
+```{r}
+data.frame(pedidos %>%
+filter(is.na(order_delivered_carrier_date) )%>%
+count(order_status, sort = T))
+```
+
+```{r}
+data.frame(pedidos %>%
+filter(is.na(order_delivered_customer_date) )%>%
+count(order_status, sort = T))
+```
+
+<br> Após as análises na base de dados **Pedidos**, os valores ausentes identificados possuem caráter informativo, pois estão relacionados ao status dos pedidos. Neste sentido, os valores ausentes não prejudicarão análises posteriores.
+
+<br> Analisaremos os valores ausentes na coluna **product_category_name** da base de dados **Produtos**.
+
+```{r}
+head(data.frame(produtos %>%
+           
+                count(product_category_name, sort = T)), 18)
+```
+
+<br> O dataset **Produtos** possui ***610 produtos que não foram categorizados***. Portanto, estes valores ausentes serão substuídos por **nao_categorizado** . Já as outras colunas com valores ausentes, não serão utilizadas em análises futuras. <br>
+
+```{r}
+
+produtos$product_category_name[which(is.na(produtos$product_category_name))] <- "nao_categorizado"
+
+```
+
+```{r}
+head(data.frame(produtos %>%
+           
+                count(product_category_name, sort = T)), 18)
+```
+
+### Verificação de dados preenchidos incorretamente
+
+Em grandes volumes de dados, em decorrência de sucessivas digitações manuais ,é frequente que ocorram falhas de preenchimento de dados. Neste sentido, verificaremos possíveis ocorrências desta natureza. <br>
+
+<br> No dataset **Consumidores** iremos verificar as colunas **customer_city** e **customer_state**
+
+<br> Iremos verificar a coluna **customer_city**.
+
+```{r}
+ str(data.frame(consumidores %>% 
+            count(customer_city, sort = T)))
+```
+
+<br> Esta coluna possui registros de **4119 cidades de clientes** no Brasil. Esta informação é aceitável, pois o Brasil possui 5570 municícpios.
+
+<br> Veriifcaremos se todos os caracteres estão em caixa baixa (minúsculo).
+
+```{r}
+
+table(grepl("[a-z]", consumidores$customer_city))
+
+```
+
+<br> Agora, iremos verificar os carecteres especiais nos dados desta coluna.
+
+```{r}
+table(str_count(consumidores$customer_city, "[:punct:]"))
+```
+
+<br> Agora, iremos verificar os acentos e o cedilha nos dados desta coluna.
+
+```{r}
+table(str_count(consumidores$customer_city, "[áéíóúàèìòùãõâêîôûç]"))
+```
+
+<br> Agora, iremos verificar o hífen e o apóstrofo nos dados desta coluna
+
+```{r}
+table(str_count(consumidores$customer_city, "[-']"))
+```
+
+<br> Para uma padronização dos dados, iremos excluir o hífen e o apostrófo.
+
+```{r}
+consumidores_limpo <- consumidores 
+  
+```
+
+```{r}
+
+consumidores_limpo$customer_city  <- gsub("[-|']", "", consumidores_limpo$customer_city)
+```
+
+<br> Agora, iremos verificar se o hífen e o apóstrofo foram retirados.
+
+```{r}
+table(str_count(consumidores_limpo$customer_city, "[-']"))
+```
+
+<br> Eles foram retirados da coluna **customer_city** do novo dataset **consumidores_limpo**.
+
+<br> Agora, iremos verificar a coluna **customer_state**.
+
+```{r}
+consumidores %>%
+  count(customer_state, sort = T)
+```
+
+<br> Esta coluna está preenchida corretamente, pois possui 26 registros de estados e mais o Distrito Federal. <br>
+
+<br> No dataset **Geolocalização** iremos verificar as colunas **geolocation_city** e **geolocation_state**.
+
+```{r}
+ str(data.frame(geolocalizacao %>% 
+            count(geolocalizacao$geolocation_city, sort = T)))
+```
+
+<br> Esta coluna possui registros de **8010 cidades** no Brasil. Certamente, os dados foram preenchidos de forma incorreta, pois o Brasil tem 5568 municícpios.
+
+<br> Verifcaremos se todos os caracteres estão em caixa baixa (minúsculo).
+
+```{r}
+table(grepl("[a-z]", geolocalizacao$geolocation_city))
+
+```
+
+<br> Agora, iremos verificar os carecteres especiais nos dados desta coluna.
+
+```{r}
+table(str_count(geolocalizacao$geolocation_city, "[:punct:]"))
+```
+
+<br> Agora, iremos verificar os acentos e cedilha nos dados desta coluna.
+
+```{r}
+table(str_count(geolocalizacao$geolocation_city, "[áéíóúàèìòùãõâêîôûç]"))
+```
+
+<br> Agora, iremos verificar o hífen e o apóstrofo nos dados desta coluna
+
+```{r}
+table(str_count(geolocalizacao$geolocation_city, "-|'"))
+```
+
+<br> Outra possível inconsistência é a utilização de abreviações para nomes de cidades. Verificaremos a existência dessa inconsitência.
+
+```{r}
+geolocalizacao %>% 
+  filter(str_detect(geolocation_city,"^bh$|^rj$|^sp$")) %>%
+  count(geolocation_city, sort = T)
+```
+
+<br> Foram encontrados alguns registros com abreviações. Para resolver este problema com os registros inconsistentes encontrados nessa base de dados, usaremos uma solução parecida com a encontrada para o dataset **consumidores**.
+
+<br> Criaremos um novo dataset e retiraremos os caracteres especiais.
+
+```{r}
+geolocalizacao_limpo <- geolocalizacao
+```
+
+<br> Excluiremos o hífen e o apostrófo.
+
+```{r}
+geolocalizacao_limpo$geolocation_city  <- gsub("-|'", "", geolocalizacao_limpo$geolocation_city)
+```
+
+<br> Excluiremos os acentos e o cedilha.
+
+```{r}
+geolocalizacao_limpo$geolocation_city  <- chartr("[áéíóúàèìòùãõâêîôûç]*", "[aeiouaeiouaoaeiouc]*", geolocalizacao_limpo$geolocation_city)
+```
+
+<br> Substituiremos algumas das siglas encontradas.
+
+```{r}
+
+
+geolocalizacao_limpo$geolocation_city <- gsub("^bh$","belo horizonte", geolocalizacao_limpo$geolocation_city)
+
+geolocalizacao_limpo$geolocation_city <- gsub("^rj$","rio de janeiro", geolocalizacao_limpo$geolocation_city)
+
+geolocalizacao_limpo$geolocation_city <- gsub("^sp$","sao paulo", geolocalizacao_limpo$geolocation_city)
+
+
+```
+
+<br> Removeremos possíves espaços em branco no ínício e no final de cada registro na coluna **geolocation_city**.
+
+```{r}
+geolocalizacao_limpo$geolocation_city <- str_trim(geolocalizacao_limpo$geolocation_city)
+```
+
+<br> Verifcaremos a existência de acentos e cedilha na coluna **geolocation_city**.
+
+```{r}
+table(str_count(geolocalizacao_limpo$geolocation_city, "[áéíóúàèìòùãõâêîôûç]"))
+```
+
+<br> Verifcaremos a existência de hífen e o apostrófo.
+
+```{r}
+table(str_count(geolocalizacao_limpo$geolocation_city, "-|'"))
+```
+
+<br> Verificaremos a existência das siglas encontradas.
+
+```{r}
+geolocalizacao_limpo %>% 
+  filter(str_detect(geolocation_city, "^bh$|^rj$|^sp$")) %>%
+  count(geolocation_city, sort = T)
+```
+
+<br> Verificaremos a quantidade de cidades.
+
+```{r}
+ str(data.frame(geolocalizacao_limpo %>% 
+            count(geolocation_city, sort = T)))
+```
+
+<br> Após a correção dos dados inconsitentes, houve uma redução de cidades registradas na coluna **geolocation_city** do dataset **geolocalizacao_limpo**. Porém, o número de registros é ainda superior ao número de municípios existentes no Brasil.
+
+<br> Portanto, iremos importar um conjuto de dados do [IBGE](https://www.ibge.gov.br/geociencias/organizacao-do-territorio/estrutura-territorial/23701-divisao-territorial-brasileira.html) de Divisão Territorial Brasileira, que possui informações sobre os municípios, com o objetivo de realizar um cruzamento nos dados e validar os nomes destes municípios.
+
+<br> A base de dados a ser importada já teve uma tratativa e foi reduzida para duas colunas. A primeira terá os códigos e a segunda os nomes de todos os municípios do Brasil.
+
+<br> Carregando a base de dados **municipios_ibge**.
+
+```{r}
+tbl_ibge <- read_csv("municipios_ibge.csv")
+```
+
+<br> Verificando a existência de registros duplicados.
+
+```{r}
+table(duplicated(tbl_ibge))
+```
+
+<br> Verificando a existência de valores `NA`.
+
+```{r}
+data.frame(anyNA = sapply(tbl_ibge,anyNA))
+```
+
+<br> Transformaremos todos os nomes de estados para siglas em caixa alta (maiúsculo), removendo todos acentos,com o objetivo de padronizar os dados.
+
+```{r}
+nomes_estados <- as_tibble(sort(unique(tbl_ibge$geolocation_state))) 
+ 
+```
+
+<br> Agora, criaremos uma coluna com as suas respectivas siglas.
+
+```{r}
+nomes_estados <- nomes_estados %>% mutate(c("AC","AL","AP","AM","BA","CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"))  
+
+```
+
+<br> Renomearemos os nomes das colunas para que possamos fazer a combinação com o dataset **tbl_ibge** para que possamos substituir as siglas.
+
+```{r warning=TRUE}
+names(nomes_estados) <- c("geolocation_state", "sigla")
+```
+
+<br> Faremos a combinação de **nome_estado** com a **tbl_ibge** e deixaremos apenas as colunas com os nomes das cidades e siglas.
+
+```{r}
+
+tbl_ibge_final <- inner_join(tbl_ibge, nomes_estados)
+tbl_ibge_final <- tbl_ibge_final[,-1]
+
+names(tbl_ibge_final) <- c("geolocation_city", "geolocation_state")
+```
+
+<br> Transformaremos todos os nomes de municípios para caixa baixa (minúsculo), com o objetivo de padronizar os dados do dataset **tbl_ibge_final**.
+
+```{r}
+tbl_ibge_final$geolocation_city <-tolower(tbl_ibge_final$geolocation_city)
+
+```
+
+<br> Removeremos todos os acentos e cedilha.
+
+```{r}
+ tbl_ibge_final$geolocation_city  <- chartr("[áéíóúàèìòùãõâêîôûç]*", "[aeiouaeiouaoaeiouc]*", tbl_ibge_final$geolocation_city)
+```
+
+<br> Removeremos o hífen e o apóstrofo.
+
+```{r}
+tbl_ibge_final$geolocation_city <- gsub("-|'", "", tbl_ibge_final$geolocation_city)
+```
+
+<br> Verificaremos a existência de pelo menos algum caractere em caixa alta na coluna **geolocation_city** (maiúsculo).
+
+```{r}
+table(str_count(tbl_ibge_final$geolocation_city, "[:upper:]"))
+```
+
+<br> Verificaremos a existência de acentos e cedilha.
+
+```{r}
+table(str_count(tbl_ibge_final$geolocation_city, "[áéíóúàèìòùãõâêîôûç]"))
+```
+
+<br> Verificaremos a existência de hífen e apóstrofo.
+
+```{r}
+table(str_count(tbl_ibge_final$geolocation_city, "[-|']"))
+```
+
+<br> Verificaremos se após os tratamentos, o dataset **tbl_ibge_final** possui dados duplicados.
+
+```{r}
+table(duplicated(tbl_ibge_final$geolocation_city))
+```
+
+<br> Com as tratativas **281** municípios ficaram duplicados. Porém, ao fazermos as junções, eles também serão referenciados pela coluna **geolocation_state**. Com isso, eles serão diferenciadas pelo estado no qual estão localizados.
+
+<br> Removeremos possíves espaços em branco no ínício e no final de cada registro na coluna **geolocation_city**.
+
+```{r}
+tbl_ibge_final$geolocation_city <- str_trim(tbl_ibge_final$geolocation_city)
+```
+
+<br> Agora, a tabela **tbl_ibge_final** foi padronizada com êxito.
+
+<br> A fim de padronizar os dados referentes à coluna **geolocation_city**, verificaremos a existência de valores correspondentes e, posteriormente, realizaremos a combinação (junção) dos datasates **tbl_ibge_final** e **geolocalizacao_limpo**.
+
+```{r}
+str(data.frame(inner_join(tbl_ibge_final, geolocalizacao_limpo))
+    %>% count(geolocation_city, sort = T))
+```
+
+```{r}
+str(data.frame(semi_join(tbl_ibge_final, geolocalizacao_limpo))
+    %>% count(geolocation_city, sort = T))
+```
+
+<br> Agora, faremos a combinação dos dois conjutos utilizando a função `inner_join`, que retornará todas as linhas do dataset **geolocalizacao_limpo** com valores correspondentes no dataset **tbl_ibge**. O critério de combinação são a coluna **geolocation_city** e **geolocation_state**, que são comuns aos dois datasets. Portanto, os valores que não forem correspondidos serão removidos após a junção.
+
+```{r}
+geolocalizacao_limpo <- inner_join(geolocalizacao_limpo, tbl_ibge_final)
+ 
+```
+
+<br> Verificaremos a quantidade de cidades no novo dataset **geolocalização_limpo**.
+
+```{r}
+str(data.frame(geolocalizacao_limpo)
+    %>% count(geolocation_city, sort = T))
+```
+
+<br> Conforme o esperado, o novo dataset possui **5188** cidades, o que é um valor aceitável.
+
+<br> Iremos verificar a existência de valores `NA`.
+
+```{r}
+data.frame(anyNA = sapply(geolocalizacao_limpo,anyNA))
+```
+
+<br> Terminamos de fazer as verificações e ajustes no dataset **geolocalizacao**. <br>
+
+## Alterando os tipos de dados das variáveis
+
+<br> Algumas variáveis do nosso conjunto de dados foram relacionadas a tipos de dados incorretos.
+
+<br> Novamente, as suas observações e transformações dos tipos de variáveis serão realizadas por cada dataset.
+
+**Dataset Consumidores**
+
+<br> Conforme necessário, o dataset **consumidores** precisou ser tratado. Por isso, usaremos o dataset **consumidores_limpo**.
+
+<br> As variáveis **customer_city** e **customer_state** são `qualitativas` (categóricas) nominais. Para tal, a melhor representação das variáveis é dada pelo tipo **factor**(fator).
+
+<br> Alterando as variáveis **customer_city** e **customer_state** para o tipo **factor**.
+
+```{r}
+
+consumidores_limpo$customer_city <- as.factor(consumidores_limpo$customer_city)
+
+consumidores_limpo$customer_state <- as.factor(consumidores_limpo$customer_state)
+```
+
+```{r}
+str(consumidores_limpo)
+```
+
+**Dataset Geolocalização**
+
+<br> Conforme necessário, o dataset **geolocalização** precisou ser tratado. Por isso, usaremos o dataset **geolocalizaçao_limpo**.
+
+<br> As variáveis **geolocation_city** e **geolocation_state** são `qualitativas` (categóricas) nominais. Para tal, a melhor representação das variáveis é dada pelo tipo **factor**(fator).
+
+<br> Alterando as variáveis **geolocation_city** e **geolocation_state** para o tipo **factor**.
+
+```{r warning=FALSE}
+geolocalizacao_limpo$geolocation_city<- as.factor(geolocalizacao_limpo$geolocation_city)
+
+geolocalizacao_limpo$geolocation_state <- as.factor(geolocalizacao_limpo$geolocation_state)
+```
+
+```{r}
+str(geolocalizacao_limpo)
+```
+
+**Dataset Pagamentos**
+
+<br> A variável **payment_type** é `qualitativa` (categórica) nominal. Para tal, a melhor representação da variável é dada pelo tipo **factor**(fator).
+
+<br> Alterando a variável **payment_type** para o tipo **factor**.
+
+```{r}
+pagamentos$payment_type <- as.factor(pagamentos$payment_type)
+
+```
+
+```{r}
+str(pagamentos)
+```
+
+**Dataset Pedidos**
+
+<br> A variável **order_status** é `qualitativa` (categórica) nominal. Para tal, a melhor representação da variável é dada pelo tipo **factor**(fator).
+
+<br> Alterando a variável **order_status** para o tipo **factor**.
+
+```{r}
+pedidos$order_status <- as.factor(pedidos$order_status)
+```
+
+```{r}
+str(pedidos)
+```
+
+**Dataset Produtos**
+
+<br> A variável **product_category_name** é `qualitativa` (categórica) nominal. Para tal, a melhor representação da variável é dada pelo tipo **factor**(fator).
+
+<br> Alterando a variável **product_category_name** para o tipo **factor**.
+
+```{r}
+produtos$product_category_name <- as.factor(produtos$product_category_name)
+```
+
+```{r}
+str(produtos)
+```
+
+**Dataset Vendedores**
+
+<br> As variáveis **seller_city** e **seller_state** são `qualitativas` (categóricas) nominais. Para tal, a melhor representação das variáveis é dada pelo tipo **factor**(fator).
+
+<br> Alterando as variáveis **seller_city** e **seller_state** para o tipo **factor**.
+
+```{r}
+vendedores$seller_city <- as.factor(vendedores$seller_city)
+
+vendedores$seller_state <- as.factor(vendedores$seller_state)
+```
+
+```{r}
+str(vendedores)
+```
+
+## Filtrando os dados
+
+<br> O **dataset Produtos** será utilizado apenas com as colunas **product_id** e **product_category_name**.
+
+```{r}
+produtos <- produtos[, c(1,2)]
+```
+
+<br> Como analisaremos o período de setembro de 2016 a setembro 2018, excluíremos regsistros que estejam fora deste intervalo no **dataset Vendas**.
+
+```{r}
+vendas_limpo <- vendas_limpo %>% 
+  filter(shipping_limit_date >= "2016-09-01 00:00:00" ,shipping_limit_date <= "2018-09-30 00:00:00" )
+
+
+```
+
+<br> Iremos verificar os seis registros com as maiores e menores datas de envio de produtos pelos vendedores.
+
+```{r}
+head(data.frame(vendas_limpo%>% 
+             select(shipping_limit_date) %>%
+             arrange(desc(shipping_limit_date))))
+
+head(data.frame(vendas_limpo%>% 
+             select(shipping_limit_date) %>%
+             arrange(shipping_limit_date)))
+
+```
+
+<br> Iremos verificar os seis registros com as maiores e menores datas de compra dos consumidores.
+
+```{r}
+head(data.frame(pedidos %>% 
+             select(order_purchase_timestamp) %>%
+             arrange(desc(order_purchase_timestamp))))
+
+head(data.frame(pedidos %>% 
+             select(order_purchase_timestamp) %>%
+             arrange(order_purchase_timestamp)))
+
+```
+
+<br> Conforme foi visualizado, o dataset possui 4 registros em outubro de 2018. Não descartaremos estes registros.
+
+# Análise dos dados
+
+<br> Após todo o processo de manipulação de dados, iremos analisar os dados e extrair informações relevantes para os tomadores de decisão.
+
+<br> Então, primeiramente, faremos a combinação dos datasets **vendas_limpo**, **pedidos**. A coluna de referência é a coluna *order_id*.
+
+```{r}
+analise_geral <- left_join(pedidos, vendas_limpo)
+
+```
+
+<br> A próxima combinação será entre o dataset **analise_geral** e **consumidores_limpo**. A coluna de referência é a coluna **customer_id**.
+
+```{r}
+analise_geral <-left_join(analise_geral, consumidores_limpo)
+```
+
+<br> A última combinação do dataset **analise_geral** e o **produtos**.
+
+```{r}
+analise_geral <- left_join(analise_geral, produtos)
+```
+
+<br> Agora, criaremos duas colunas com dados agrupados por trimestres, para nos axuiliar na visualização dos dados referentes às datas de compra e entrega do consumidor. Para isso, usaremos a função `as.yearqtr`do pacote `zoo`.
+
+```{r}
+analise_geral <- analise_geral %>% 
+  mutate(trimestre_order_purchase = as.yearqtr(order_purchase_timestamp), trimestre_delivered_customer = as.yearqtr(order_delivered_customer_date)) %>% arrange(order_purchase_timestamp)
+
+```
+
+```{r}
+data.frame(anyNA = sapply(analise_geral,anyNA))
+```
+
+## Análise Geral
+
+<br> Faremos um resumo sobre os principais indicadores relacionados à uma empresa de e-commerce como o Olist. Nesta seção, apresentaremos os insights necessários para auxiliar as equipes de `marketing` e de `supply chain` a tomarem decisões.
+
+### Consumidores
+
+#### Total de consumidores
+
+<br> Analisaremos o número de consumidores.
+
+```{r}
+length(unique(analise_geral$customer_unique_id))
+
+
+```
+
+O total de consumidores entre setembro de 2016 a outubro de 2018 foi de **96096**.
+
+#### Consumidores por Trimestre
+
+<br> Agora, analisaremos o total de clientes por período. Primeiramente, criaremos um tema que utlizaremos na plotagem dos gráficos
+
+```{r}
+tema <- theme(text=element_text(family="Arial"),
+            title=element_text(color="black",size=15),
+            axis.text = element_text(color="black",size=10),
+            axis.title = element_text(color="black",size=10),
+            panel.grid=element_line(color="white",linetype = "dashed",size=.8),
+            axis.line=element_blank(),
+            plot.background=element_rect(fill="white",color="white"),
+            panel.background=element_rect(fill="white"),
+            panel.border = element_rect(colour = "black", fill = NA,size=0.59),
+            legend.key= element_rect(color="white",fill="white"))
+```
+
+<br> Agora, plotaremos o gráfico de Consumidores por Trimestre, utilzando a função `ggplot` do pacote `ggplot2`. A função `ggplotly` do pacote `ploty`transforma o gráfico estático em interativo.
+
+```{r warning=FALSE}
+ggplotly( analise_geral %>% 
+    filter(!duplicated(customer_unique_id)) %>% count(trimestre_order_purchase)  %>% 
+ggplot(aes(x = trimestre_order_purchase , y = n)) +
+  geom_line(linewidth = 1, color = "#3D66DA") +
+    geom_point(color = "#3D66DA") +
+  geom_area(fill = "#A0B4F2") +
+  labs(x = "", y = "", title = "Consumidores por Trimestre") + 
+  tema)
+
+  
+```
+
+<br> Após essa análise, percebemos que o primeiro e o segundo trimestre de 2018 foram os períodos com as maiores quantidades de novos clientes.
+
+### Receita e Ticket Médio
+
+<br> Nesta seção, abordaremos indicadores primordias de avaliação do negócio, que são a Receita e o Ticket médio. Nesse sentido, esses indicadores podem ajudar o time de marketing, por exemplo, a revisar e otimizar políticas de preço, promoção e descontos, entre outras medidas.
+
+<br> Primeiramente, calcularemos a receita de vendas e frete.
+
+#### Total de Receita de Vendas
+
+```{r}
+sum(analise_geral$price, na.rm = TRUE)
+
+```
+
+<br> O Total de Receita compreendido entre setembro de 2016 a outubro de 2018 foi de **12,4 milhões de reais**.
+
+#### Receita de Vendas por Ano
+
+```{r message=FALSE, warning=FALSE}
+
+ggplotly(analise_geral %>% mutate(ano = format(order_purchase_timestamp, "%Y")) %>% aggregate(price ~ ano,FUN = sum)  %>%
+ggplot(aes(x = ano , y = price)) +
+  geom_bar(stat = "summary",  fill = "#A0B4F2") +
+  labs(x = "", y = "", title = "Total de Receita de Vendas por Ano") +  scale_y_continuous(labels = scales::comma_format(scale = 1e-6, accuracy = 0.1, suffix = "M")) + tema)
+```
+
+<br> Analisando o total de Receita de Fretes por Ano, o maior faturamento foi em 2018 com aproximadamente **6,75 Milhões de reais e 20% superior em relação ao ano de 2017**.
+
+<br> O desempenho foi muito bom, porque só foram avaliados 10 meses do ano de 2018. A Receita de Vendas do ano de 2016 foi bem inferior ao do ano de 2017 e por isso não fizemos a análise comparativa.
+
+#### Receita de Vendas por Trimestre
+
+```{r message=FALSE, warning=FALSE}
+options(scipen = 999)
+
+ggplotly(analise_geral  %>%
+    
+ggplot(aes(x = trimestre_order_purchase , y = price)) +
+  geom_bar(stat = "summary",fun ="sum" , color = "#3D66DA", fill ="#A0B4F2") + 
+  labs(x = "", y = "", title = "Receita de Vendas por Trimestre") + scale_y_continuous(labels = scales::comma_format(scale = 1e-6, accuracy = 0.1, suffix = "M")) + 
+  tema)
+  
+```
+
+<br> Fazendo a análise de Receita de Vendas por Trimestre, identificou-se que do primeiro Trimestre de 2017 ao segundo Trimestre de 2018 teve um crescimento de Receita por período.
+
+#### Total de Receita de Frete
+
+<br> Não tivemos nesses datasets acesso ao custo com frete. Porém, vamos analisar as receitas com frete, para que os tomadores de decisão tenham acesso.
+
+```{r}
+sum(analise_geral$freight_value, na.rm = TRUE)
+```
+
+<br> O Total de Receita de Frete compreendido entre setembro de 2016 a outubro de 2018 foi de **1,99 milhão de reais**.
+
+#### Receita de Frete por Ano
+
+```{r message=FALSE, warning=FALSE}
+ggplotly(analise_geral %>% mutate(ano = format(order_delivered_customer_date, "%Y")) %>% aggregate(freight_value ~ ano,FUN = sum)  %>%
+ggplot(aes(x = ano , y = freight_value)) +
+  geom_bar(stat = "summary",  fill = "#A0B4F2", na.rm = TRUE) +
+  labs(x = "", y = "", title = "Total de Receita de Frete por Ano") +  scale_y_continuous(labels = scales::comma_format(scale = 1e-6, accuracy = 0.1, suffix = "M")) + tema)
+```
+
+<br> Analisando o total de Receita de Fretes por Ano, o maior faturamento foi em 2018 com aproximadamente **1,14 Milhão de reais e 45% superior em relação ao ano de 2017**.
+
+<br> O desempenho foi muito bom, porque só foram avaliados 10 meses do ano de 2018. A Receita de Fretes do ano de 2016 foi bem inferior ao do ano de 2017 e por isso não fizemos a análise comparativa.
+
+#### Receita de Frete por Trimestre
+
+```{r}
+ggplotly(analise_geral  %>%
+    
+ggplot(aes(x = trimestre_delivered_customer , y = freight_value)) +
+  geom_bar(stat = "summary",fun ="sum" , color = "#3D66DA", fill ="#A0B4F2", na.rm = TRUE) + 
+  labs(x = "", y = "", title = "Receita de Frete por Trimestre") + scale_y_continuous(labels = scales::comma_format(scale = 1e-6, accuracy = 0.1, suffix = "M")) + 
+  tema)
+```
+
+<br> Assim como observado no gráfico de Receita de Vendas por Trimestre, a Receita de Frete por Trimestre teve crescimento do primeiro Trimestre de 2017 ao segundo Trimestre de 2018.
+
+#### Ticket Médio
+
+<br> O Ticket Médio é um indicador financeiro calcula o valor médio das vendas e serve para avaliar o potencial de compra dos clientes. Ele é muito utilizado para analisar cada canal de venda que uma empresa de ecommerce possui e auxilia no planejamento, na previsao de vendas e na tomada de decisão.
+
+<br> Neste sentido, faremos análises dos Tickets médios por consumdior e pedidos de maneira análoga a receita.
+
+#### Ticket Médio Total
+
+```{r}
+(sum(analise_geral$price, na.rm = TRUE)/(length(analise_geral$order_id)))
+```
+
+<br> O Total de Receita compreendido entre setembro de 2016 a outubro de 2018 foi de **12,4 milhões de reais**.
+
+#### Ticket Médio por Ano
+
+<br> Calcularemos o Ticket Médio por Ano. Ao plotarmos o gráfico, colocaremos o Valor de Ticket Médio de todo o período para que possamos compará-lo.
+
+```{r message=FALSE, warning=FALSE}
+
+ggplotly(analise_geral %>% mutate(ano = format(order_purchase_timestamp, "%Y")) %>% aggregate(price ~ ano,FUN = mean) %>%
+           ggplot(aes(x = ano , y = price)) +
+           geom_bar(stat = "identity",  fill = "#A0B4F2") +
+           geom_hline(yintercept = 124.8996, size = 0.3) +
+  labs(x = "", y = "", title = "Ticket Médio por Ano")  + tema)
+
+
+```
+
+<br> Verificamos que todos os anos possuem o Ticket Médio acima da média para todos os nos. Porém, descartaremos o ano de 2016, pois tivemos poucas vendas.
+
+#### Ticket Médio por Trimestre
+
+```{r}
+ggplotly(analise_geral  %>% aggregate(price ~ trimestre_order_purchase ,FUN = mean) %>%
+           ggplot(aes(x = trimestre_order_purchase , y = price)) +
+           geom_bar(stat = "identity",  color = "#3D66DA", fill = "#A0B4F2") +
+           geom_hline(yintercept = 124.8996, size = 0.3) +
+  labs(x = "", y = "", title = "Ticket Médio por Trimestre")  + tema)
+
+```
+
+<br> Ao analisarmos o Ticket Médio por Trimestre, verificamos que o quarto trimestre de 2016, os primeiro e segundo trimestres de 2017, e os segundo e quarto trimestres de 2018 tiveram valores superiores ao Ticket Médio de todo o período (2016 a 2018).
+
+#### Receita por Estados
+
+Analisaremos os Estados que mais contribuíram para a Receita em todo o período, ou seja, os Estados de moradia dos consumidores.
+
+```{r message=FALSE, warning=FALSE}
+ggplotly(analise_geral %>%
+         mutate(percentual_vendas = (price/sum(price, na.rm = TRUE)*100)) %>% aggregate(percentual_vendas ~ customer_state, FUN = sum)  %>%
+ggplot(aes(x = reorder(customer_state, percentual_vendas) , y = percentual_vendas)) +
+  geom_bar(stat = "identity" ,fill = "#A0B4F2") +
+  labs(x = "", y = "Percentual de Receita de Vendas (%)", title = "Total de Receita de Vendas por Estado") +  coord_flip() + 
+  tema)
+```
+
+<br> O Estado de **São Paulo** foi responsável por, aproximadamente, **38,2%** das vendas em todo o período (2016 a 2018). Rio de Janeiro (13,4%), Minas Gerais (11,8%), Rio Grande do Sul (5,5%) e Paraná (4,98%) juntos com São Paulo foram reponsáveis por aproximadamente **74% da Receita de Vendas**.
+
+#### Receita de Vendas por Categoria de Produto.
+
+<br> Agora, analisaremos as 15 categorias de produtos mais vendidas ao longo do ano de 2016 ao de 2018.
+
+```{r}
+ggplotly(head(analise_geral %>%
+         mutate(percentual_vendas = (price/sum(price, na.rm = TRUE)*100)) %>% aggregate(percentual_vendas ~ product_category_name, FUN = sum), 15 )%>%
+ggplot(aes(x = reorder(product_category_name, percentual_vendas) , y = percentual_vendas)) +
+  geom_bar(stat = "identity" ,fill = "#A0B4F2") +
+  labs(x = "", y = "Percentual de Receita de Vendas (%)", title = "Total de Receita de Vendas por Categoria de Produto") +  coord_flip() + 
+  tema)
+```
+
+<br> A categoria de **beleza e saúde** foi responsável por **9,60%** da receita de vendas.
+
+## Análise de Pedidos
+
+<br> Nesta seção, faremos um resumo sobre os principais indicadores relacionados aos pedidos. Analisaremos os picos de vendas por hora e dia, por exemplo, dentre outros indicadores essenciais para o entendimento do negócio.
+
+
+
+
